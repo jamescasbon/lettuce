@@ -109,13 +109,27 @@ class StepDefinition(object):
         self.line = function.func_code.co_firstlineno + 1
         self.step = step
 
+        self.fix = function.fix
+        self.fixed = False
+
+
     def __call__(self, *args, **kw):
         """Method that actually wrapps the call to step definition
         callback. Sends step object as first argument
         """
         try:
             ret = self.function(self.step, *args, **kw)
-            self.step.passed = True
+
+            # hook for fixing things up
+            if ret is False and self.fix:
+                fixret = self.fix(*args, **kw)
+                if fixret is not False:
+                    ret = self.function(self.step, *args, **kw)
+
+            if ret is False:
+                self.step.passed = False
+            else:
+                self.step.passed = True
         except Exception, e:
             self.step.failed = True
             self.step.why = ReasonToFail(e)
@@ -379,8 +393,6 @@ class Step(object):
             groups = matched.groups()
             step_definition(*groups)
 
-        self.passed = True
-        return True
 
     @staticmethod
     def run_all(steps, outline=None, run_callbacks=False, ignore_case=True):
@@ -409,10 +421,13 @@ class Step(object):
 
                 if run_callbacks:
                     call_hook('before_each', 'step', step)
-
                 if not steps_failed and not steps_undefined:
                     step.run(ignore_case)
-                    steps_passed.append(step)
+
+                    if step.passed:
+                        steps_passed.append(step)
+                    else:
+                        steps_failed.append(step)
 
             except NoDefinitionFound, e:
                 steps_undefined.append(e.step)
@@ -420,7 +435,6 @@ class Step(object):
             except Exception, e:
                 steps_failed.append(step)
                 reasons_to_fail.append(step.why)
-
             finally:
                 all_steps.append(step)
                 if run_callbacks:

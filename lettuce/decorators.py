@@ -19,7 +19,7 @@ from lettuce.core import STEP_REGISTRY
 from lettuce.exceptions import StepLoadingError
 
 
-def step(regex):
+def step(regex, fix=None):
     """Decorates a function, so that it will become a new step
     definition.
 
@@ -45,6 +45,10 @@ def step(regex):
                                    "  for function: %s\n"
                                    "  error: %s" % (regex, func, e))
         STEP_REGISTRY[regex] = func
+
+        func.fix = fix
         return func
+
+
 
     return wrap
