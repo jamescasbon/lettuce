@@ -87,10 +87,11 @@ def print_end(total):
         total.features_passed))
 
     word = total.scenarios_ran > 1 and "scenarios" or "scenario"
-    wrt("%d %s (%d passed)\n" % (
+    wrt("%d %s (%d passed, %d skipped)\n" % (
         total.scenarios_ran,
         word,
-        total.scenarios_passed))
+        total.scenarios_passed,
+        total.scenarios_skipped))
 
     steps_details = []
     for kind in ("failed","skipped",  "undefined"):

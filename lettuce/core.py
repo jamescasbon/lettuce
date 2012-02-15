@@ -370,7 +370,7 @@ class Step(object):
             for step in steps:
                 step.scenario = self.scenario
 
-        (_, _, steps_failed, steps_undefined, _) = self.run_all(steps)
+        (_, _, steps_failed, steps_undefined, _, _) = self.run_all(steps)
         if not steps_failed and not steps_undefined:
             self.passed = True
             self.failed = False
@@ -412,7 +412,18 @@ class Step(object):
         steps_undefined = []
         reasons_to_fail = []
 
+        state = None
+        skip_scenario = False
+
+
         for step in steps:
+
+            new_state = step.sentence.split()[0].upper()
+            if new_state != 'AND':
+                if new_state not in ['GIVEN', 'WHEN', 'THEN']:
+                    raise Exception('unknown step clause "%s"' % new_state)
+                state = new_state
+
             if outline:
                 step = step.solve_and_clone(outline)
 
@@ -421,13 +432,21 @@ class Step(object):
 
                 if run_callbacks:
                     call_hook('before_each', 'step', step)
-                if not steps_failed and not steps_undefined:
+
+                if (not skip_scenario) and (not steps_undefined):
                     step.run(ignore_case)
 
-                    if step.passed:
-                        steps_passed.append(step)
+                    if state == 'GIVEN':
+                        if step.passed:
+                            steps_passed.append(step)
+                        else:
+                            skip_scenario = True
+
                     else:
-                        steps_failed.append(step)
+                        if step.passed:
+                            steps_passed.append(step)
+                        else:
+                            steps_failed.append(step)
 
             except NoDefinitionFound, e:
                 steps_undefined.append(e.step)
@@ -440,7 +459,7 @@ class Step(object):
                 if run_callbacks:
                     call_hook('after_each', 'step', step)
 
-        return (all_steps, steps_passed, steps_failed, steps_undefined, reasons_to_fail)
+        return (all_steps, steps_passed, steps_failed, steps_undefined, reasons_to_fail, skip_scenario)
 
     @classmethod
     def many_from_lines(klass, lines, filename=None, original_string=None):
@@ -477,6 +496,7 @@ class Step(object):
             else:
                 step_strings.append(line)
 
+
         mkargs = lambda s: [s, filename, original_string]
         return [klass.from_string(*mkargs(s)) for s in step_strings]
 
@@ -492,7 +512,6 @@ class Step(object):
                 if sentence in line:
                     line = pline + 1
                     break
-
         return cls(sentence,
                    remaining_lines=lines,
                    line=line,
@@ -607,7 +626,7 @@ class Scenario(object):
         call_hook('before_each', 'scenario', self)
 
         def run_scenario(almost_self, order=-1, outline=None, run_callbacks=False):
-            all_steps, steps_passed, steps_failed, steps_undefined, reasons_to_fail = Step.run_all(self.steps, outline, run_callbacks, ignore_case)
+            all_steps, steps_passed, steps_failed, steps_undefined, reasons_to_fail, skip_scenario = Step.run_all(self.steps, outline, run_callbacks, ignore_case)
             skip = lambda x: x not in steps_passed and x not in steps_undefined and x not in steps_failed
 
             steps_skipped = filter(skip, all_steps)
@@ -620,7 +639,8 @@ class Scenario(object):
                 steps_passed,
                 steps_failed,
                 steps_skipped,
-                steps_undefined
+                steps_undefined,
+                skip_scenario
             )
 
         if self.outlines:
@@ -878,13 +898,15 @@ class FeatureResult(object):
 
     @property
     def passed(self):
-        return all([result.passed for result in self.scenario_results])
+        return all([result.passed for result in self.scenario_results if not result.skipped])
+
+
 
 
 class ScenarioResult(object):
     """Object that holds results of each step ran from within a scenario"""
     def __init__(self, scenario, steps_passed, steps_failed, steps_skipped,
-                 steps_undefined):
+                 steps_undefined, skipped):
 
         self.scenario = scenario
 
@@ -895,10 +917,14 @@ class ScenarioResult(object):
 
         all_lists = [steps_passed + steps_skipped + steps_undefined + steps_failed]
         self.total_steps = sum(map(len, all_lists))
+        self.skipped = skipped
+
 
     @property
     def passed(self):
         return self.total_steps is len(self.steps_passed)
+
+
 
 
 class TotalResult(object):
@@ -947,3 +973,8 @@ class TotalResult(object):
     @property
     def scenarios_passed(self):
         return len([result for result in self.scenario_results if result.passed])
+
+    @property
+    def scenarios_skipped(self):
+        return len([result for result in self.scenario_results if result.skipped])
+

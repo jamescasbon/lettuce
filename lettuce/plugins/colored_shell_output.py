@@ -193,11 +193,12 @@ def print_end(total):
         color = "\033[0;31m"
 
     word = total.scenarios_ran > 1 and "scenarios" or "scenario"
-    write_out("\033[1;37m%d %s (%s%d passed\033[1;37m)\033[0m\n" % (
+    write_out("\033[1;37m%d %s (%s%d passed, %s skipped\033[1;37m)\033[0m\n" % (
         total.scenarios_ran,
         word,
         color,
-        total.scenarios_passed))
+        total.scenarios_passed,
+        total.scenarios_skipped))
 
     steps_details = []
     kinds_and_colors = {
